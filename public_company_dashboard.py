@@ -151,13 +151,17 @@ if ticker_input:
     except Exception as e:
         st.warning(f"Could not generate financial overview: {e}")
 
-    with st.expander("📂 Detailed Financial Statements (Past 5 Years)", expanded=False):
+    st.subheader("📂 Detailed Financial Statements")
+    detail_view = st.radio("View Detailed Statements:", ["Annual", "Quarterly"], horizontal=True)
+    selected_data = [raw_fin, raw_cf, raw_bs] if detail_view == "Annual" else [raw_qfin, ticker.quarterly_cashflow.T, ticker.quarterly_balance_sheet.T]
+
+    with st.expander("Financial Statements", expanded=False):
         try:
-            for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
+            for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], selected_data):
                 data = data.copy()
-                data.index = pd.to_datetime(data.index).year
+                data.index = pd.to_datetime(data.index).year if detail_view == "Annual" else pd.to_datetime(data.index)
                 grouped = data.groupby(level=0).first().T.fillna(0)
-                grouped = grouped.iloc[:, :5]  # Show most recent 5 years
+                grouped = grouped.iloc[:, :5]  # Show most recent 5 periods
                 st.markdown(f"#### {title}")
                 st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
         except Exception as e:
