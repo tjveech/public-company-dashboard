@@ -86,16 +86,16 @@ if ticker_input:
                 hist_clean = hist[['Close']].copy()
                 hist_clean.index.name = "Date"
                 hist_clean = hist_clean.reset_index()
-                hist_clean.columns = [str(col) for col in hist_clean.columns]
+                hist_clean['Date'] = pd.to_datetime(hist_clean['Date']).dt.date  # Remove time for Excel compatibility
                 hist_clean = hist_clean.astype({"Close": float})
                 hist_clean.to_excel(writer, index=False, sheet_name="Price History")
 
                 # Income Statement
                 fin_clean = fin.copy()
-                fin_clean.index = fin_clean.index.strftime('%Y-%m-%d')
+                fin_clean.index = pd.to_datetime(fin_clean.index).date
                 fin_clean.columns = [str(col) for col in fin_clean.columns]
-                fin_clean = fin_clean.reset_index().rename(columns={"index": "Date"})
-                fin_clean = fin_clean.applymap(lambda x: float(x) if pd.notnull(x) else None)
+                fin_clean = fin_clean.reset_index()
+                fin_clean.rename(columns={"index": "Date"}, inplace=True)
                 fin_clean.to_excel(writer, index=False, sheet_name="Income Statement")
 
                 # Valuation
