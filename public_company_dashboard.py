@@ -46,13 +46,15 @@ if ticker_input:
     # Financials
     raw_fin = ticker.financials.T
     raw_qfin = ticker.quarterly_financials.T
+    raw_bs = ticker.balance_sheet.T
+    raw_cf = ticker.cashflow.T
     fin = raw_fin if view == "Annual" else raw_qfin
     fin.index = pd.to_datetime(fin.index)
     fin = fin.sort_index()
     ltm_date = fin.index.max()
 
-    # Key Market Data & Valuation
-    st.subheader("📌 Key Financial Snapshot")
+    # Capitalization Section
+    st.subheader("💼 Capitalization")
     try:
         shares_out = info.get('sharesOutstanding', 0)
         market_cap = shares_out * last_price if shares_out else info.get('marketCap', 0)
@@ -72,31 +74,30 @@ if ticker_input:
         ev_ebitda = enterprise_value / ebitda if ebitda else None
         ev_sales = enterprise_value / revenue if revenue else None
 
-        st.markdown(f"**As of {last_price_date}**")
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Share Price", f"${last_price:,.2f}")
-            st.metric("Shares Outstanding", f"{shares_out:,.0f}")
-            st.metric("Market Cap", f"${market_cap:,.0f}")
-            st.metric("P/E (LTM)", f"{round(pe, 2)}" if pe else "N/A")
+            st.metric(f"Share Price (as of {last_price_date})", f"${last_price:,.2f}")
+            st.metric(f"Shares Outstanding (as of {last_price_date})", f"{shares_out:,.0f}")
+            st.metric(f"Market Cap (as of {last_price_date})", f"${market_cap:,.0f}")
         with col2:
-            st.metric("Cash (as of {ltm_date.date()})", f"${cash:,.0f}")
-            st.metric("Total Debt (as of {ltm_date.date()})", f"${total_debt:,.0f}")
-            st.metric("Enterprise Value", f"${enterprise_value:,.0f}")
-            st.metric("P/E (NTM)", f"{round(forward_pe, 2)}" if forward_pe else "N/A")
+            st.metric(f"Cash (as of {ltm_date.date()})", f"${cash:,.0f}")
+            st.metric(f"Total Debt (as of {ltm_date.date()})", f"${total_debt:,.0f}")
+            st.metric(f"Enterprise Value (as of {last_price_date})", f"${enterprise_value:,.0f}")
 
         st.markdown("### 📊 Valuation Multiples")
         col3, col4 = st.columns(2)
         with col3:
+            st.metric("P/E (LTM)", f"{round(pe, 2)}" if pe else "N/A")
             st.metric("EV / EBITDA (LTM)", f"{round(ev_ebitda, 2)}" if ev_ebitda else "N/A")
         with col4:
+            st.metric("P/E (NTM)", f"{round(forward_pe, 2)}" if forward_pe else "N/A")
             st.metric("EV / Revenue (LTM)", f"{round(ev_sales, 2)}" if ev_sales else "N/A")
 
     except Exception as e:
         st.warning(f"Some key data is missing or caused an error: {e}")
 
-    # Income Statement
-    st.subheader("📄 Income Statement")
+    # Financial Overview
+    st.subheader("📄 Financial Overview")
     try:
         rows = [
             "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
@@ -117,9 +118,10 @@ if ticker_input:
 
         df = pd.DataFrame()
         for label, raw in income_map.items():
-            if raw in fin.columns:
-                temp = fin[raw].copy()
-                temp.index = temp.index.year
+            source_df = raw_cf if raw in raw_cf.columns else fin
+            if raw in source_df.columns:
+                temp = source_df[raw].copy()
+                temp.index = pd.to_datetime(temp.index).year
                 grouped = temp.groupby(level=0).first()
                 df[label] = pd.to_numeric(grouped, errors='coerce')
 
@@ -145,4 +147,17 @@ if ticker_input:
         st.dataframe(df, use_container_width=True)
 
     except Exception as e:
-        st.warning(f"Could not generate income statement: {e}")
+        st.warning(f"Could not generate financial overview: {e}")
+
+    # Detailed Financials Section
+    st.subheader("📂 Detailed Financial Statements (Past 5 Years)")
+    try:
+        for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
+            data = data.copy()
+            data.index = pd.to_datetime(data.index).year
+            grouped = data.groupby(level=0).first().T
+            grouped = grouped.iloc[:, :5]  # Show most recent 5 years
+            st.markdown(f"#### {title}")
+            st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
+    except Exception as e:
+        st.warning(f"Could not load detailed statements: {e}")
