@@ -96,6 +96,57 @@ if ticker_input:
     except Exception as e:
         st.warning(f"Some key data is missing or caused an error: {e}")
 
+    st.subheader("📄 Financial Overview")
+    try:
+        rows = [
+            "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
+            "Operating Expenses", "EBITDA", "EBITDA Margin",
+            "Net Income", "Net Income Margin", "Capital Expenditures", "Operating Cash Flow", "LTM Revenue", "LTM EBITDA"
+        ]
+
+        income_map = {
+            "Revenue": "Total Revenue",
+            "Gross Profit": "Gross Profit",
+            "Operating Expenses": "Operating Expenses",
+            "EBITDA": "EBITDA",
+            "Net Income": "Net Income",
+            "Capital Expenditures": "Capital Expenditures",
+            "Operating Cash Flow": "Operating Cash Flow"
+        }
+
+        df = pd.DataFrame()
+        for label, raw in income_map.items():
+            source_df = raw_cf if raw in raw_cf.columns else fin
+            if raw in source_df.columns:
+                temp = source_df[raw].copy()
+                temp.index = pd.to_datetime(temp.index).year
+                grouped = temp.groupby(level=0).first()
+                df[label] = pd.to_numeric(grouped, errors='coerce')
+
+        df = df.T
+        df.columns = df.columns.astype(str)
+        df.loc["LTM Revenue"] = ltm.get("Total Revenue", float("nan"))
+        df.loc["LTM EBITDA"] = ltm.get("EBITDA", float("nan"))
+
+        if "Revenue" in df.index:
+            df.loc["YoY Revenue Growth"] = df.loc["Revenue"].pct_change().apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+        if "Gross Profit" in df.index and "Revenue" in df.index:
+            df.loc["Gross Margin"] = (df.loc["Gross Profit"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+        if "EBITDA" in df.index and "Revenue" in df.index:
+            df.loc["EBITDA Margin"] = (df.loc["EBITDA"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+        if "Net Income" in df.index and "Revenue" in df.index:
+            df.loc["Net Income Margin"] = (df.loc["Net Income"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+
+        for row in df.index:
+            if "Margin" not in row and "Growth" not in row:
+                df.loc[row] = df.loc[row].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else "")
+
+        df = df.reindex(rows)
+        st.dataframe(df, use_container_width=True)
+
+    except Exception as e:
+        st.warning(f"Could not generate financial overview: {e}")
+
     st.subheader("📂 Detailed Financial Statements (Past 5 Years)")
     try:
         for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
@@ -107,3 +158,28 @@ if ticker_input:
             st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
     except Exception as e:
         st.warning(f"Could not load detailed statements: {e}")
+
+    st.subheader("📤 Export to Excel")
+    def to_excel():
+        output = BytesIO()
+        try:
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
+                    df = data.copy()
+                    df.index = pd.to_datetime(df.index).year
+                    df = df.groupby(level=0).first().T.iloc[:, :5]
+                    df.to_excel(writer, sheet_name=title[:31])
+            output.seek(0)
+            return output
+        except Exception as e:
+            st.error(f"Excel generation error: {e}")
+            return None
+
+    excel = to_excel()
+    if excel:
+        st.download_button(
+            label="📥 Download Excel File",
+            data=excel,
+            file_name=f"{ticker_input}_financials_{datetime.today().date()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
