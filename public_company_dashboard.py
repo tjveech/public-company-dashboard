@@ -41,6 +41,9 @@ if ticker_input:
     last_price_date = hist.index.max().date()
     last_price = hist['Close'].iloc[-1]
 
+    st.subheader("📈 Stock Price History")
+    st.line_chart(hist['Close'])
+
     # Financials
     raw_fin = ticker.financials.T
     raw_qfin = ticker.quarterly_financials.T
@@ -101,7 +104,7 @@ if ticker_input:
     try:
         rows = [
             "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
-            "Operating Expenses", "EBITDA", "EBITDA Margin",
+            "EBITDA", "EBITDA Margin",
             "Net Income", "Net Income Margin", "Capital Expenditures", "Operating Cash Flow", "LTM Revenue", "LTM EBITDA"
         ]
 
@@ -148,9 +151,9 @@ if ticker_input:
     except Exception as e:
         st.warning(f"Could not generate financial overview: {e}")
 
-    st.subheader("📂 Detailed Financial Statements (Past 5 Years)")
-    try:
-        for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
+    with st.expander("📂 Detailed Financial Statements (Past 5 Years)", expanded=False):
+        try:
+            for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
             data = data.copy()
             data.index = pd.to_datetime(data.index).year
             grouped = data.groupby(level=0).first().T.fillna(0)
