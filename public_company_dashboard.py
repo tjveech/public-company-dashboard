@@ -76,13 +76,13 @@ if ticker_input:
 
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"Share Price (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input})")
-            st.markdown(f"Shares Outstanding (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
-            st.markdown(f"Market Cap (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"Share Price (as of {last_price_date}): ${last_price:,.2f} [🔗](https://finance.yahoo.com/quote/{ticker_input})")")
+            st.markdown(f"Shares Outstanding (as of {last_price_date}): {shares_out:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")")
+            st.markdown(f"Market Cap (as of {last_price_date}): ${market_cap:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")")
         with col2:
-            st.markdown(f"Cash (as of {fin.index.max().date()}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")
-            st.markdown(f"Total Debt (as of {fin.index.max().date()}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")
-            st.markdown(f"Enterprise Value (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"Cash (as of {fin.index.max().date()}): ${cash:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")")
+            st.markdown(f"Total Debt (as of {fin.index.max().date()}): ${total_debt:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")")
+            st.markdown(f"Enterprise Value (as of {last_price_date}): ${enterprise_value:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")")
 
         st.markdown("### 📊 Valuation Multiples")
         col3, col4 = st.columns(2)
@@ -152,7 +152,7 @@ if ticker_input:
         for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
             data = data.copy()
             data.index = pd.to_datetime(data.index).year
-            grouped = data.groupby(level=0).first().T
+            grouped = data.groupby(level=0).first().T.fillna(0)
             grouped = grouped.iloc[:, :5]  # Show most recent 5 years
             st.markdown(f"#### {title}")
             st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
