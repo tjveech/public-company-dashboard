@@ -138,11 +138,20 @@ if ticker_input:
         if "Revenue" in df.index:
             df.loc["YoY Revenue Growth"] = df.loc["Revenue"].pct_change().apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
         if "Gross Profit" in df.index and "Revenue" in df.index:
-            df.loc["Gross Margin"] = (df.loc["Gross Profit"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+            try:
+                df.loc["Gross Margin"] = (pd.to_numeric(df.loc["Gross Profit"].str.replace("$", "").str.replace(",", "")) / pd.to_numeric(df.loc["Revenue"].str.replace("$", "").str.replace(",", ""))).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+            except Exception as e:
+                st.warning(f"Error calculating Gross Margin: {e}")
         if "EBITDA" in df.index and "Revenue" in df.index:
-            df.loc["EBITDA Margin"] = (df.loc["EBITDA"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+            try:
+                df.loc["EBITDA Margin"] = (pd.to_numeric(df.loc["EBITDA"].str.replace("$", "").str.replace(",", "")) / pd.to_numeric(df.loc["Revenue"].str.replace("$", "").str.replace(",", ""))).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+            except Exception as e:
+                st.warning(f"Error calculating EBITDA Margin: {e}")
         if "Net Income" in df.index and "Revenue" in df.index:
-            df.loc["Net Income Margin"] = (df.loc["Net Income"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+            try:
+                df.loc["Net Income Margin"] = (pd.to_numeric(df.loc["Net Income"].str.replace("$", "").str.replace(",", "")) / pd.to_numeric(df.loc["Revenue"].str.replace("$", "").str.replace(",", ""))).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+            except Exception as e:
+                st.warning(f"Error calculating Net Income Margin: {e}")
 
         for row in df.index:
             if "Margin" not in row and "Growth" not in row:
