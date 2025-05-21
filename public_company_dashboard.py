@@ -50,16 +50,8 @@ if ticker_input:
         revenue = fin.get("Total Revenue", pd.Series([None])).dropna()
         revenue = revenue.iloc[-1] if not revenue.empty else None
 
-        ebit = fin.get("Ebit", pd.Series([None])).dropna()
-        ebit = ebit.iloc[-1] if not ebit.empty else 0
-
-        interest_exp = fin.get("Interest Expense", pd.Series([0])).dropna()
-        interest_exp = interest_exp.iloc[-1] if not interest_exp.empty else 0
-
-        depreciation = fin.get("Depreciation", pd.Series([0])).dropna()
-        depreciation = depreciation.iloc[-1] if not depreciation.empty else 0
-
-        ebitda = ebit + interest_exp + depreciation
+        ebitda_series = fin.get("EBITDA", pd.Series([None])).dropna()
+        ebitda = ebitda_series.iloc[-1] if not ebitda_series.empty else None
 
         net_income = fin.get("Net Income", pd.Series([None])).dropna()
         net_income = net_income.iloc[-1] if not net_income.empty else None
@@ -88,15 +80,18 @@ if ticker_input:
             summary.to_excel(writer, index=False, sheet_name="Summary")
 
             # Price History (cleaned)
-            hist_clean = hist[['Close']].dropna()
+            hist_clean = hist[['Close']].copy()
             hist_clean.index.name = "Date"
-            hist_clean.to_excel(writer, sheet_name="Price History")
+            hist_clean = hist_clean.reset_index()
+            hist_clean.columns = [str(col) for col in hist_clean.columns]
+            hist_clean.to_excel(writer, index=False, sheet_name="Price History")
 
             # Income Statement (cleaned)
             fin_clean = fin.copy()
+            fin_clean.index = fin_clean.index.strftime('%Y-%m-%d')
             fin_clean.columns = [str(col) for col in fin_clean.columns]
-            fin_clean = fin_clean.fillna("")
-            fin_clean.to_excel(writer, sheet_name="Income Statement")
+            fin_clean = fin_clean.reset_index().rename(columns={"index": "Date"})
+            fin_clean.to_excel(writer, index=False, sheet_name="Income Statement")
 
             # Valuation Sheet
             val = pd.DataFrame({
