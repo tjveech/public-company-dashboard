@@ -152,10 +152,10 @@ if ticker_input:
         st.warning(f"Could not generate financial overview: {e}")
 
     with st.expander("📂 Detailed Financial Statements (Past 5 Years)", expanded=False):
-        try:
-            for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
-                data = data.copy()
-                data.index = pd.to_datetime(data.index).year
+    try:
+        for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
+            data = data.copy()
+            data.index = pd.to_datetime(data.index).year
             grouped = data.groupby(level=0).first().T.fillna(0)
             grouped = grouped.iloc[:, :5]  # Show most recent 5 years
             st.markdown(f"#### {title}")
