@@ -17,6 +17,7 @@ if ticker_input:
 
     # Price Data
     hist = ticker.history(period="5y")
+    hist.index = hist.index.tz_localize(None)  # Remove timezone info for Excel export
     st.subheader("📈 Stock Price (5 Years)")
     st.line_chart(hist['Close'])
 
