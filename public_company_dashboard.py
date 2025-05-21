@@ -10,10 +10,15 @@ st.title("📊 Public Company Financial Dashboard")
 
 st.markdown("""
 <style>
-    .block-container { padding-top: 1rem; }
+    html, body, [class*="css"]  {
+        font-size: 13px !important;
+        line-height: 1.2;
+    }
+    .block-container { padding-top: 1rem; padding-bottom: 1rem; }
     section.main > div { overflow-x: auto; }
     div[data-testid="metric-container"] {
-        font-size: 14px !important;
+        padding: 0.25rem !important;
+        font-size: 13px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -36,13 +41,6 @@ if ticker_input:
     last_price_date = hist.index.max().date()
     last_price = hist['Close'].iloc[-1]
 
-    # Dropdown chart selector
-    st.subheader("📈 Historical Trend Chart")
-    chart_option = st.selectbox("Choose metric to plot:", ["Share Price", "P/E (LTM)", "EV / EBITDA (LTM)", "EV / Revenue (LTM)"])
-    chart_data = hist[['Close']].copy()
-    chart_data.rename(columns={'Close': 'Share Price'}, inplace=True)
-    st.line_chart(chart_data[chart_option] if chart_option in chart_data.columns else chart_data['Share Price'])
-
     # Financials
     raw_fin = ticker.financials.T
     raw_qfin = ticker.quarterly_financials.T
@@ -51,7 +49,9 @@ if ticker_input:
     fin = raw_fin if view == "Annual" else raw_qfin
     fin.index = pd.to_datetime(fin.index)
     fin = fin.sort_index()
-    ltm_date = fin.index.max()
+    ltm_df = raw_qfin.copy()
+    ltm_df.index = pd.to_datetime(ltm_df.index)
+    ltm = ltm_df.sort_index().iloc[-4:].sum()
 
     # Capitalization Section
     st.subheader("💼 Capitalization")
@@ -76,88 +76,22 @@ if ticker_input:
 
         col1, col2 = st.columns(2)
         with col1:
-            st.metric(f"Share Price (as of {last_price_date})", f"${last_price:,.2f}")
-            st.metric(f"Shares Outstanding (as of {last_price_date})", f"{shares_out:,.0f}")
-            st.metric(f"Market Cap (as of {last_price_date})", f"${market_cap:,.0f}")
+            st.markdown(f"Share Price (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input})")
+            st.markdown(f"Shares Outstanding (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"Market Cap (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
         with col2:
-            st.metric(f"Cash (as of {ltm_date.date()})", f"${cash:,.0f}")
-            st.metric(f"Total Debt (as of {ltm_date.date()})", f"${total_debt:,.0f}")
-            st.metric(f"Enterprise Value (as of {last_price_date})", f"${enterprise_value:,.0f}")
+            st.markdown(f"Cash (as of {fin.index.max().date()}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")
+            st.markdown(f"Total Debt (as of {fin.index.max().date()}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")
+            st.markdown(f"Enterprise Value (as of {last_price_date}) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
 
         st.markdown("### 📊 Valuation Multiples")
         col3, col4 = st.columns(2)
         with col3:
-            st.metric("P/E (LTM)", f"{round(pe, 2)}" if pe else "N/A")
-            st.metric("EV / EBITDA (LTM)", f"{round(ev_ebitda, 2)}" if ev_ebitda else "N/A")
+            st.markdown(f"P/E (LTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"EV / EBITDA (LTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
         with col4:
-            st.metric("P/E (NTM)", f"{round(forward_pe, 2)}" if forward_pe else "N/A")
-            st.metric("EV / Revenue (LTM)", f"{round(ev_sales, 2)}" if ev_sales else "N/A")
+            st.markdown(f"P/E (NTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"EV / Revenue (LTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
 
     except Exception as e:
         st.warning(f"Some key data is missing or caused an error: {e}")
-
-    # Financial Overview
-    st.subheader("📄 Financial Overview")
-    try:
-        rows = [
-            "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
-            "Operating Expenses", "EBITDA", "EBITDA Margin", "EBIT", "EBIT Margin",
-            "Net Income", "Net Income Margin", "Capital Expenditures", "Operating Cash Flow"
-        ]
-
-        income_map = {
-            "Revenue": "Total Revenue",
-            "Gross Profit": "Gross Profit",
-            "Operating Expenses": "Operating Expenses",
-            "EBITDA": "EBITDA",
-            "EBIT": "Ebit",
-            "Net Income": "Net Income",
-            "Capital Expenditures": "Capital Expenditures",
-            "Operating Cash Flow": "Operating Cash Flow"
-        }
-
-        df = pd.DataFrame()
-        for label, raw in income_map.items():
-            source_df = raw_cf if raw in raw_cf.columns else fin
-            if raw in source_df.columns:
-                temp = source_df[raw].copy()
-                temp.index = pd.to_datetime(temp.index).year
-                grouped = temp.groupby(level=0).first()
-                df[label] = pd.to_numeric(grouped, errors='coerce')
-
-        df = df.T
-        df.columns = df.columns.astype(str)
-
-        if "Revenue" in df.index:
-            df.loc["YoY Revenue Growth"] = df.loc["Revenue"].pct_change().apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
-        if "Gross Profit" in df.index and "Revenue" in df.index:
-            df.loc["Gross Margin"] = (df.loc["Gross Profit"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
-        if "EBITDA" in df.index and "Revenue" in df.index:
-            df.loc["EBITDA Margin"] = (df.loc["EBITDA"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
-        if "EBIT" in df.index and "Revenue" in df.index:
-            df.loc["EBIT Margin"] = (df.loc["EBIT"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
-        if "Net Income" in df.index and "Revenue" in df.index:
-            df.loc["Net Income Margin"] = (df.loc["Net Income"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
-
-        for row in df.index:
-            if "Margin" not in row and "Growth" not in row:
-                df.loc[row] = df.loc[row].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else "")
-
-        df = df.reindex(rows)
-        st.dataframe(df, use_container_width=True)
-
-    except Exception as e:
-        st.warning(f"Could not generate financial overview: {e}")
-
-    # Detailed Financials Section
-    st.subheader("📂 Detailed Financial Statements (Past 5 Years)")
-    try:
-        for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
-            data = data.copy()
-            data.index = pd.to_datetime(data.index).year
-            grouped = data.groupby(level=0).first().T
-            grouped = grouped.iloc[:, :5]  # Show most recent 5 years
-            st.markdown(f"#### {title}")
-            st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
-    except Exception as e:
-        st.warning(f"Could not load detailed statements: {e}")
