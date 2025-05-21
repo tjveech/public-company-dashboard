@@ -72,45 +72,49 @@ if ticker_input:
     st.subheader("📤 Export to Excel")
     def to_excel():
         output = BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            summary = pd.DataFrame({
-                "Metric": ["Market Cap", "Enterprise Value", "Shares Outstanding", "Total Debt", "Cash"],
-                "Value": [market_cap, enterprise_value, shares_out, total_debt, cash]
-            })
-            summary.to_excel(writer, index=False, sheet_name="Summary")
+        try:
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                summary = pd.DataFrame({
+                    "Metric": ["Market Cap", "Enterprise Value", "Shares Outstanding", "Total Debt", "Cash"],
+                    "Value": [market_cap, enterprise_value, shares_out, total_debt, cash]
+                })
+                summary.to_excel(writer, index=False, sheet_name="Summary")
 
-            # Price History (cleaned)
-            hist_clean = hist[['Close']].copy()
-            hist_clean.index.name = "Date"
-            hist_clean = hist_clean.reset_index()
-            hist_clean.columns = [str(col) for col in hist_clean.columns]
-            hist_clean.to_excel(writer, index=False, sheet_name="Price History")
+                # Price History (cleaned)
+                hist_clean = hist[['Close']].copy()
+                hist_clean.index.name = "Date"
+                hist_clean = hist_clean.reset_index()
+                hist_clean.columns = [str(col) for col in hist_clean.columns]
+                hist_clean = hist_clean.applymap(lambda x: float(x) if pd.notnull(x) else "")
+                hist_clean.to_excel(writer, index=False, sheet_name="Price History")
 
-            # Income Statement (cleaned)
-            fin_clean = fin.copy()
-            fin_clean.index = fin_clean.index.strftime('%Y-%m-%d')
-            fin_clean.columns = [str(col) for col in fin_clean.columns]
-            fin_clean = fin_clean.reset_index().rename(columns={"index": "Date"})
-            fin_clean.to_excel(writer, index=False, sheet_name="Income Statement")
+                # Income Statement (cleaned)
+                fin_clean = fin.copy()
+                fin_clean.index = fin_clean.index.strftime('%Y-%m-%d')
+                fin_clean.columns = [str(col) for col in fin_clean.columns]
+                fin_clean = fin_clean.reset_index().rename(columns={"index": "Date"})
+                fin_clean = fin_clean.applymap(lambda x: float(x) if pd.notnull(x) else "")
+                fin_clean.to_excel(writer, index=False, sheet_name="Income Statement")
 
-            # Valuation Sheet
-            val = pd.DataFrame({
-                "Metric": ["P/E", "EV/EBITDA", "EV/Sales"],
-                "Value": [round(pe, 2) if pe else "N/A",
-                          round(ev_ebitda, 2) if ev_ebitda else "N/A",
-                          round(ev_sales, 2) if ev_sales else "N/A"]
-            })
-            val.to_excel(writer, index=False, sheet_name="Valuation")
-        output.seek(0)
-        return output
+                # Valuation Sheet
+                val = pd.DataFrame({
+                    "Metric": ["P/E", "EV/EBITDA", "EV/Sales"],
+                    "Value": [round(pe, 2) if pe else "N/A",
+                              round(ev_ebitda, 2) if ev_ebitda else "N/A",
+                              round(ev_sales, 2) if ev_sales else "N/A"]
+                })
+                val.to_excel(writer, index=False, sheet_name="Valuation")
+            output.seek(0)
+            return output
+        except Exception as e:
+            st.error(f"Excel generation error: {e}")
+            return None
 
-    try:
-        excel = to_excel()
+    excel = to_excel()
+    if excel:
         st.download_button(
             label="📥 Download Excel File",
             data=excel,
             file_name=f"{ticker_input}_summary_{datetime.today().date()}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-    except Exception as e:
-        st.error(f"Excel export failed: {e}")
