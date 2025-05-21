@@ -155,7 +155,7 @@ if ticker_input:
         try:
             for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
                 data = data.copy()
-            data.index = pd.to_datetime(data.index).year
+                data.index = pd.to_datetime(data.index).year
             grouped = data.groupby(level=0).first().T.fillna(0)
             grouped = grouped.iloc[:, :5]  # Show most recent 5 years
             st.markdown(f"#### {title}")
