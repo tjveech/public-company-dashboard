@@ -105,7 +105,7 @@ if ticker_input:
         rows = [
     "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
     "EBITDA", "EBITDA Margin",
-    "Net Income", "Net Income Margin", "Operating Cash Flow", "LTM"]
+    "Net Income", "Net Income Margin", "Operating Cash Flow"]
 
         income_map = {
             "Revenue": "Total Revenue",
@@ -128,13 +128,7 @@ if ticker_input:
 
         df = df.T
         df.columns = df.columns.astype(str)
-        ltm_label = f"LTM (as of {ltm_df.index.max().date()})"
-        if "Total Revenue" in ltm or "EBITDA" in ltm:
-            df.loc["LTM"] = ""
-            if "Total Revenue" in ltm:
-                df.at["LTM", ltm_label] = f"${ltm['Total Revenue']:,.0f}"
-            if "EBITDA" in ltm:
-                df.at["LTM", ltm_label] = f"${ltm['EBITDA']:,.0f}"
+        
 
         if "Revenue" in df.index:
             df.loc["YoY Revenue Growth"] = df.loc["Revenue"].pct_change().apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
