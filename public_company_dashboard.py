@@ -39,8 +39,7 @@ if ticker_input:
 
     # Financial Statements
     st.subheader("📄 Income Statement (Last 4 Years)")
-    fin = ticker.financials
-    fin = fin.T
+    fin = ticker.financials.T
     fin.index = pd.to_datetime(fin.index)
     st.dataframe(fin.tail(4))
 
@@ -48,12 +47,22 @@ if ticker_input:
     st.subheader("📊 Valuation Multiples")
     pe = ev_ebitda = ev_sales = None
     try:
-        revenue = fin.get("Total Revenue", pd.Series([None]))[-1]
-        ebit = fin.get("Ebit", pd.Series([None]))[-1]
-        interest_exp = fin.get("Interest Expense", pd.Series([0]))[-1]
-        depreciation = fin.get("Depreciation", pd.Series([0]))[-1]
-        ebitda = ebit + interest_exp + depreciation if ebit is not None else None
-        net_income = fin.get("Net Income", pd.Series([None]))[-1]
+        revenue = fin.get("Total Revenue", pd.Series([None])).dropna()
+        revenue = revenue.iloc[-1] if not revenue.empty else None
+
+        ebit = fin.get("Ebit", pd.Series([None])).dropna()
+        ebit = ebit.iloc[-1] if not ebit.empty else 0
+
+        interest_exp = fin.get("Interest Expense", pd.Series([0])).dropna()
+        interest_exp = interest_exp.iloc[-1] if not interest_exp.empty else 0
+
+        depreciation = fin.get("Depreciation", pd.Series([0])).dropna()
+        depreciation = depreciation.iloc[-1] if not depreciation.empty else 0
+
+        ebitda = ebit + interest_exp + depreciation
+
+        net_income = fin.get("Net Income", pd.Series([None])).dropna()
+        net_income = net_income.iloc[-1] if not net_income.empty else None
 
         pe = market_cap / net_income if net_income and net_income != 0 else None
         ev_ebitda = enterprise_value / ebitda if ebitda and ebitda != 0 else None
@@ -78,13 +87,18 @@ if ticker_input:
             })
             summary.to_excel(writer, index=False, sheet_name="Summary")
 
-            price_data = hist[['Close']].dropna()
-            price_data = price_data.applymap(lambda x: float(x) if pd.notnull(x) else "")
-            price_data.to_excel(writer, sheet_name="Price History")
+            # Price History (cleaned)
+            hist_clean = hist[['Close']].dropna()
+            hist_clean.index.name = "Date"
+            hist_clean.to_excel(writer, sheet_name="Price History")
 
-            fin_cleaned = fin.applymap(lambda x: float(x) if pd.notnull(x) else "")
-            fin_cleaned.to_excel(writer, sheet_name="Income Statement")
+            # Income Statement (cleaned)
+            fin_clean = fin.copy()
+            fin_clean.columns = [str(col) for col in fin_clean.columns]
+            fin_clean = fin_clean.fillna("")
+            fin_clean.to_excel(writer, sheet_name="Income Statement")
 
+            # Valuation Sheet
             val = pd.DataFrame({
                 "Metric": ["P/E", "EV/EBITDA", "EV/Sales"],
                 "Value": [round(pe, 2) if pe else "N/A",
