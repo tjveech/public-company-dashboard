@@ -12,6 +12,9 @@ st.markdown("""
 <style>
     .block-container { padding-top: 1rem; }
     section.main > div { overflow-x: auto; }
+    div[data-testid="metric-container"] {
+        font-size: 14px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -21,8 +24,14 @@ if ticker_input:
     ticker = yf.Ticker(ticker_input)
     info = ticker.info
 
+    # Data range selector
+    date_range = st.selectbox("Select historical data range:", ["1y", "5y", "10y", "max"], index=1)
+
+    # Annual or Quarterly toggle
+    view = st.radio("Data View:", ["Annual", "Quarterly"], horizontal=True)
+
     # Price Data
-    hist = ticker.history(period="5y")
+    hist = ticker.history(period=date_range)
     hist.index = hist.index.tz_localize(None)
     last_price_date = hist.index.max().date()
     last_price = hist['Close'].iloc[-1]
@@ -35,8 +44,9 @@ if ticker_input:
     st.line_chart(chart_data[chart_option] if chart_option in chart_data.columns else chart_data['Share Price'])
 
     # Financials
-    fin = ticker.financials.T
-    qfin = ticker.quarterly_financials.T
+    raw_fin = ticker.financials.T
+    raw_qfin = ticker.quarterly_financials.T
+    fin = raw_fin if view == "Annual" else raw_qfin
     fin.index = pd.to_datetime(fin.index)
     fin = fin.sort_index()
     ltm_date = fin.index.max()
@@ -50,12 +60,10 @@ if ticker_input:
         cash = info.get('totalCash', 0)
         enterprise_value = market_cap + total_debt - cash
 
-        # LTM figures
         revenue = fin.get("Total Revenue", pd.Series([None])).dropna().iloc[-1]
         ebitda = fin.get("EBITDA", pd.Series([None])).dropna().iloc[-1]
         net_income = fin.get("Net Income", pd.Series([None])).dropna().iloc[-1]
 
-        # NTM estimates
         forward_pe = info.get("forwardPE")
         forward_eps = info.get("forwardEps")
         est_net_income = forward_eps * shares_out if forward_eps and shares_out else None
@@ -65,24 +73,30 @@ if ticker_input:
         ev_sales = enterprise_value / revenue if revenue else None
 
         st.markdown(f"**As of {last_price_date}**")
-        st.metric("Share Price", f"${last_price:,.2f}")
-        st.metric("Shares Outstanding", f"{shares_out:,.0f}")
-        st.metric("Market Cap", f"${market_cap:,.0f}")
-        st.metric("Cash (as of {ltm_date.date()})", f"${cash:,.0f}")
-        st.metric("Total Debt (as of {ltm_date.date()})", f"${total_debt:,.0f}")
-        st.metric("Enterprise Value", f"${enterprise_value:,.0f}")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Share Price", f"${last_price:,.2f}")
+            st.metric("Shares Outstanding", f"{shares_out:,.0f}")
+            st.metric("Market Cap", f"${market_cap:,.0f}")
+            st.metric("P/E (LTM)", f"{round(pe, 2)}" if pe else "N/A")
+        with col2:
+            st.metric("Cash (as of {ltm_date.date()})", f"${cash:,.0f}")
+            st.metric("Total Debt (as of {ltm_date.date()})", f"${total_debt:,.0f}")
+            st.metric("Enterprise Value", f"${enterprise_value:,.0f}")
+            st.metric("P/E (NTM)", f"{round(forward_pe, 2)}" if forward_pe else "N/A")
 
         st.markdown("### 📊 Valuation Multiples")
-        st.metric("P/E (LTM)", f"{round(pe, 2)}" if pe else "N/A")
-        st.metric("EV / EBITDA (LTM)", f"{round(ev_ebitda, 2)}" if ev_ebitda else "N/A")
-        st.metric("EV / Revenue (LTM)", f"{round(ev_sales, 2)}" if ev_sales else "N/A")
-        st.metric("P/E (NTM)", f"{round(forward_pe, 2)}" if forward_pe else "N/A")
+        col3, col4 = st.columns(2)
+        with col3:
+            st.metric("EV / EBITDA (LTM)", f"{round(ev_ebitda, 2)}" if ev_ebitda else "N/A")
+        with col4:
+            st.metric("EV / Revenue (LTM)", f"{round(ev_sales, 2)}" if ev_sales else "N/A")
 
     except Exception as e:
         st.warning(f"Some key data is missing or caused an error: {e}")
 
     # Income Statement
-    st.subheader("📄 Income Statement (5 Years + LTM + NTM)")
+    st.subheader("📄 Income Statement")
     try:
         rows = [
             "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
@@ -107,7 +121,7 @@ if ticker_input:
                 temp = fin[raw].copy()
                 temp.index = temp.index.year
                 grouped = temp.groupby(level=0).first()
-                df[label] = grouped
+                df[label] = pd.to_numeric(grouped, errors='coerce')
 
         df = df.T
         df.columns = df.columns.astype(str)
