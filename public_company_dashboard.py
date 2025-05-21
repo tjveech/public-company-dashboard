@@ -4,7 +4,6 @@ import streamlit as st
 from io import BytesIO
 from datetime import datetime
 
-# Set page config
 st.set_page_config(page_title="Public Company Dashboard", layout="wide")
 
 st.title("📊 Public Company Financial Dashboard")
@@ -21,13 +20,17 @@ if ticker_input:
     last_price_date = hist.index.max().date()
     last_price = hist['Close'].iloc[-1]
 
-    st.subheader("📈 Stock Price (5 Years)")
-    st.line_chart(hist['Close'])
+    # Dropdown chart selector
+    st.subheader("📈 Historical Trend Chart")
+    chart_option = st.selectbox("Choose metric to plot:", ["Share Price", "P/E (LTM)", "EV / EBITDA (LTM)", "EV / Revenue (LTM)"])
+    chart_data = hist[['Close']].copy()
+    chart_data.rename(columns={'Close': 'Share Price'}, inplace=True)
+    st.line_chart(chart_data[chart_option] if chart_option in chart_data.columns else chart_data['Share Price'])
 
     # Financials
     fin = ticker.financials.T
+    qfin = ticker.quarterly_financials.T
     fin.index = pd.to_datetime(fin.index)
-    fin = fin.sort_index()
     ltm_date = fin.index.max()
 
     # Key Market Data & Valuation
@@ -39,10 +42,15 @@ if ticker_input:
         cash = info.get('totalCash', 0)
         enterprise_value = market_cap + total_debt - cash
 
-        # Financial figures for LTM
+        # LTM figures
         revenue = fin.get("Total Revenue", pd.Series([None])).dropna().iloc[-1]
         ebitda = fin.get("EBITDA", pd.Series([None])).dropna().iloc[-1]
         net_income = fin.get("Net Income", pd.Series([None])).dropna().iloc[-1]
+
+        # NTM estimates (basic estimation from Yahoo Finance fields)
+        forward_pe = info.get("forwardPE")
+        forward_eps = info.get("forwardEps")
+        est_net_income = forward_eps * shares_out if forward_eps and shares_out else None
 
         # Valuation multiples
         pe = market_cap / net_income if net_income else None
@@ -57,94 +65,65 @@ if ticker_input:
         st.metric("Total Debt (as of {ltm_date.date()})", f"${total_debt:,.0f}")
         st.metric("Enterprise Value", f"${enterprise_value:,.0f}")
 
-        st.markdown("### 📊 Valuation Multiples (LTM)")
-        st.metric("P/E", f"{round(pe, 2)}" if pe else "N/A")
-        st.metric("EV / EBITDA", f"{round(ev_ebitda, 2)}" if ev_ebitda else "N/A")
-        st.metric("EV / Revenue", f"{round(ev_sales, 2)}" if ev_sales else "N/A")
+        st.markdown("### 📊 Valuation Multiples")
+        st.metric("P/E (LTM)", f"{round(pe, 2)}" if pe else "N/A")
+        st.metric("EV / EBITDA (LTM)", f"{round(ev_ebitda, 2)}" if ev_ebitda else "N/A")
+        st.metric("EV / Revenue (LTM)", f"{round(ev_sales, 2)}" if ev_sales else "N/A")
+        st.metric("P/E (NTM)", f"{round(forward_pe, 2)}" if forward_pe else "N/A")
 
     except Exception as e:
         st.warning(f"Some key data is missing or caused an error: {e}")
 
-    # Income Statement Reformatted
-    st.subheader("📄 Income Statement (Fiscal Years + LTM)")
+    # Income Statement
+    st.subheader("📄 Income Statement (5 Years + LTM + NTM)")
     try:
-        income_items = [
-            "Total Revenue", "Gross Profit", "Operating Expenses", "EBITDA",
-            "Ebit", "Net Income", "Capital Expenditures", "Operating Cash Flow"
+        rows = [
+            "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
+            "OpEx", "EBITDA", "EBITDA Margin", "EBIT", "EBIT Margin",
+            "Net Income", "Net Income Margin", "CapEx", "Op. Cash Flow"
         ]
 
-        income_renames = {
-            "Total Revenue": "Revenue",
+        income_map = {
+            "Revenue": "Total Revenue",
             "Gross Profit": "Gross Profit",
-            "Operating Expenses": "OpEx",
+            "OpEx": "Operating Expenses",
             "EBITDA": "EBITDA",
-            "Ebit": "EBIT",
+            "EBIT": "Ebit",
             "Net Income": "Net Income",
-            "Capital Expenditures": "CapEx",
-            "Operating Cash Flow": "Op. Cash Flow"
+            "CapEx": "Capital Expenditures",
+            "Op. Cash Flow": "Operating Cash Flow"
         }
 
-        fiscal_years = fin.index.year.unique().tolist()
-        income_data = {}
-        for item in income_items:
-            if item in fin.columns:
-                row = fin[item].copy()
-                row.index = row.index.year
-                row = row.groupby(level=0).first()
-                income_data[income_renames.get(item, item)] = row
+        df = pd.DataFrame()
+        for label, raw in income_map.items():
+            if raw in fin.columns:
+                temp = fin[raw].copy()
+                temp.index = temp.index.year
+                grouped = temp.groupby(level=0).first()
+                df[label] = grouped
 
-        df_income = pd.DataFrame(income_data).T
-        df_income = df_income.loc[:, ~df_income.columns.duplicated()].copy()
-        df_income.columns = df_income.columns.astype(str)
-        st.dataframe(df_income)
+        df = df.T
+        df.columns = df.columns.astype(str)
+
+        # Derivatives
+        if "Revenue" in df.index:
+            df.loc["YoY Revenue Growth"] = df.loc["Revenue"].pct_change().apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+        if "Gross Profit" in df.index and "Revenue" in df.index:
+            df.loc["Gross Margin"] = (df.loc["Gross Profit"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+        if "EBITDA" in df.index and "Revenue" in df.index:
+            df.loc["EBITDA Margin"] = (df.loc["EBITDA"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+        if "EBIT" in df.index and "Revenue" in df.index:
+            df.loc["EBIT Margin"] = (df.loc["EBIT"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+        if "Net Income" in df.index and "Revenue" in df.index:
+            df.loc["Net Income Margin"] = (df.loc["Net Income"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+
+        # Format numbers
+        for row in df.index:
+            if "Margin" not in row and "Growth" not in row:
+                df.loc[row] = df.loc[row].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else "")
+
+        df = df.reindex(rows)
+        st.dataframe(df)
 
     except Exception as e:
-        st.warning(f"Could not generate income statement table: {e}")
-
-    # Excel Export
-    st.subheader("📤 Export to Excel")
-    def to_excel():
-        output = BytesIO()
-        try:
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                # Summary
-                summary = pd.DataFrame({
-                    "Metric": ["Share Price", "Shares Outstanding", "Market Cap", "Cash", "Debt", "Enterprise Value"],
-                    "Value": [last_price, shares_out, market_cap, cash, total_debt, enterprise_value]
-                })
-                summary.to_excel(writer, index=False, sheet_name="Summary")
-
-                # Valuation
-                val = pd.DataFrame({
-                    "Metric": ["P/E (LTM)", "EV/EBITDA (LTM)", "EV/Revenue (LTM)"],
-                    "Value": [round(pe, 2) if pe else "N/A",
-                              round(ev_ebitda, 2) if ev_ebitda else "N/A",
-                              round(ev_sales, 2) if ev_sales else "N/A"]
-                })
-                val.to_excel(writer, index=False, sheet_name="Valuation")
-
-                # Price History
-                hist_clean = hist[['Close']].copy()
-                hist_clean.index.name = "Date"
-                hist_clean = hist_clean.reset_index()
-                hist_clean['Date'] = pd.to_datetime(hist_clean['Date']).dt.date
-                hist_clean = hist_clean.astype({"Close": float})
-                hist_clean.to_excel(writer, index=False, sheet_name="Price History")
-
-                # Income Statement
-                df_income.to_excel(writer, sheet_name="Income Statement")
-
-            output.seek(0)
-            return output
-        except Exception as e:
-            st.error(f"Excel generation error: {e}")
-            return None
-
-    excel = to_excel()
-    if excel:
-        st.download_button(
-            label="📥 Download Excel File",
-            data=excel,
-            file_name=f"{ticker_input}_summary_{datetime.today().date()}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        st.warning(f"Could not generate income statement: {e}")
