@@ -153,13 +153,13 @@ if ticker_input:
 
     with st.expander("📂 Detailed Financial Statements (Past 5 Years)", expanded=False):
         try:
-        for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
-            data = data.copy()
-            data.index = pd.to_datetime(data.index).year
-            grouped = data.groupby(level=0).first().T.fillna(0)
-            grouped = grouped.iloc[:, :5]  # Show most recent 5 years
-            st.markdown(f"#### {title}")
-            st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
+            for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
+                data = data.copy()
+                data.index = pd.to_datetime(data.index).year
+                grouped = data.groupby(level=0).first().T.fillna(0)
+                grouped = grouped.iloc[:, :5]  # Show most recent 5 years
+                st.markdown(f"#### {title}")
+                st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
     except Exception as e:
         st.warning(f"Could not load detailed statements: {e}")
 
