@@ -183,3 +183,4 @@ if ticker_input:
             file_name=f"{ticker_input}_financials_{datetime.today().date()}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+ 
