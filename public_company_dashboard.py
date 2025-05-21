@@ -62,9 +62,9 @@ if ticker_input:
         cash = info.get('totalCash', 0)
         enterprise_value = market_cap + total_debt - cash
 
-        revenue = fin.get("Total Revenue", pd.Series([None])).dropna().iloc[-1]
-        ebitda = fin.get("EBITDA", pd.Series([None])).dropna().iloc[-1]
-        net_income = fin.get("Net Income", pd.Series([None])).dropna().iloc[-1]
+        revenue = fin.get("Total Revenue", pd.Series([None])).dropna().iloc[-1] if "Total Revenue" in fin.columns else None
+        ebitda = fin.get("EBITDA", pd.Series([None])).dropna().iloc[-1] if "EBITDA" in fin.columns else None
+        net_income = fin.get("Net Income", pd.Series([None])).dropna().iloc[-1] if "Net Income" in fin.columns else None
 
         forward_pe = info.get("forwardPE")
         forward_eps = info.get("forwardEps")
@@ -87,11 +87,23 @@ if ticker_input:
         st.markdown("### 📊 Valuation Multiples")
         col3, col4 = st.columns(2)
         with col3:
-            st.markdown(f"P/E (LTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
-            st.markdown(f"EV / EBITDA (LTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"P/E (LTM): {'{:.2f}'.format(pe) if pe else 'N/A'} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"EV / EBITDA (LTM): {'{:.2f}'.format(ev_ebitda) if ev_ebitda else 'N/A'} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
         with col4:
-            st.markdown(f"P/E (NTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
-            st.markdown(f"EV / Revenue (LTM) [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"P/E (NTM): {'{:.2f}'.format(forward_pe) if forward_pe else 'N/A'} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
+            st.markdown(f"EV / Revenue (LTM): {'{:.2f}'.format(ev_sales) if ev_sales else 'N/A'} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
 
     except Exception as e:
         st.warning(f"Some key data is missing or caused an error: {e}")
+
+    st.subheader("📂 Detailed Financial Statements (Past 5 Years)")
+    try:
+        for title, data in zip(["Income Statement", "Cash Flow Statement", "Balance Sheet"], [raw_fin, raw_cf, raw_bs]):
+            data = data.copy()
+            data.index = pd.to_datetime(data.index).year
+            grouped = data.groupby(level=0).first().T
+            grouped = grouped.iloc[:, :5]  # Show most recent 5 years
+            st.markdown(f"#### {title}")
+            st.dataframe(grouped.style.format("${:,.0f}"), use_container_width=True)
+    except Exception as e:
+        st.warning(f"Could not load detailed statements: {e}")
