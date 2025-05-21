@@ -83,7 +83,7 @@ if ticker_input:
             st.markdown(f"**Cash (as of {fin.index.max().date()})**: ${cash:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")
             st.markdown(f"**Total Debt (as of {fin.index.max().date()})**: ${total_debt:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/balance-sheet)")
             st.markdown(f"**Enterprise Value (as of {last_price_date})**: ${enterprise_value:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")
-: ${enterprise_value:,.0f} [🔗](https://finance.yahoo.com/quote/{ticker_input}/key-statistics)")")
+
 
         st.markdown("### 📊 Valuation Multiples")
         col3, col4 = st.columns(2)
