@@ -8,6 +8,13 @@ st.set_page_config(page_title="Public Company Dashboard", layout="wide")
 
 st.title("📊 Public Company Financial Dashboard")
 
+st.markdown("""
+<style>
+    .block-container { padding-top: 1rem; }
+    section.main > div { overflow-x: auto; }
+</style>
+""", unsafe_allow_html=True)
+
 ticker_input = st.text_input("Enter Ticker Symbol (e.g., AAPL, MSFT):", value="AAPL")
 
 if ticker_input:
@@ -31,6 +38,7 @@ if ticker_input:
     fin = ticker.financials.T
     qfin = ticker.quarterly_financials.T
     fin.index = pd.to_datetime(fin.index)
+    fin = fin.sort_index()
     ltm_date = fin.index.max()
 
     # Key Market Data & Valuation
@@ -47,12 +55,11 @@ if ticker_input:
         ebitda = fin.get("EBITDA", pd.Series([None])).dropna().iloc[-1]
         net_income = fin.get("Net Income", pd.Series([None])).dropna().iloc[-1]
 
-        # NTM estimates (basic estimation from Yahoo Finance fields)
+        # NTM estimates
         forward_pe = info.get("forwardPE")
         forward_eps = info.get("forwardEps")
         est_net_income = forward_eps * shares_out if forward_eps and shares_out else None
 
-        # Valuation multiples
         pe = market_cap / net_income if net_income else None
         ev_ebitda = enterprise_value / ebitda if ebitda else None
         ev_sales = enterprise_value / revenue if revenue else None
@@ -79,19 +86,19 @@ if ticker_input:
     try:
         rows = [
             "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
-            "OpEx", "EBITDA", "EBITDA Margin", "EBIT", "EBIT Margin",
-            "Net Income", "Net Income Margin", "CapEx", "Op. Cash Flow"
+            "Operating Expenses", "EBITDA", "EBITDA Margin", "EBIT", "EBIT Margin",
+            "Net Income", "Net Income Margin", "Capital Expenditures", "Operating Cash Flow"
         ]
 
         income_map = {
             "Revenue": "Total Revenue",
             "Gross Profit": "Gross Profit",
-            "OpEx": "Operating Expenses",
+            "Operating Expenses": "Operating Expenses",
             "EBITDA": "EBITDA",
             "EBIT": "Ebit",
             "Net Income": "Net Income",
-            "CapEx": "Capital Expenditures",
-            "Op. Cash Flow": "Operating Cash Flow"
+            "Capital Expenditures": "Capital Expenditures",
+            "Operating Cash Flow": "Operating Cash Flow"
         }
 
         df = pd.DataFrame()
@@ -105,7 +112,6 @@ if ticker_input:
         df = df.T
         df.columns = df.columns.astype(str)
 
-        # Derivatives
         if "Revenue" in df.index:
             df.loc["YoY Revenue Growth"] = df.loc["Revenue"].pct_change().apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
         if "Gross Profit" in df.index and "Revenue" in df.index:
@@ -117,13 +123,12 @@ if ticker_input:
         if "Net Income" in df.index and "Revenue" in df.index:
             df.loc["Net Income Margin"] = (df.loc["Net Income"] / df.loc["Revenue"]).apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
 
-        # Format numbers
         for row in df.index:
             if "Margin" not in row and "Growth" not in row:
                 df.loc[row] = df.loc[row].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else "")
 
         df = df.reindex(rows)
-        st.dataframe(df)
+        st.dataframe(df, use_container_width=True)
 
     except Exception as e:
         st.warning(f"Could not generate income statement: {e}")
