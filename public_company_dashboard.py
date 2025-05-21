@@ -1,4 +1,3 @@
-
 import yfinance as yf
 import pandas as pd
 import streamlit as st
@@ -45,13 +44,17 @@ if ticker_input:
     fin.index = pd.to_datetime(fin.index)
     st.dataframe(fin.tail(4))
 
-    # Valuation Metrics
+    # Valuation Multiples
     st.subheader("📊 Valuation Multiples")
+    pe = ev_ebitda = ev_sales = None
     try:
-        revenue = fin["Total Revenue"].iloc[-1]
-        ebitda = fin["Ebit"] + fin["Interest Expense"] + fin["Depreciation"]
-        ebitda = ebitda.iloc[-1]
-        net_income = fin["Net Income"].iloc[-1]
+        revenue = fin["Total Revenue"].iloc[-1] if "Total Revenue" in fin.columns else None
+        ebit = fin["Ebit"].iloc[-1] if "Ebit" in fin.columns else None
+        interest_exp = fin["Interest Expense"].iloc[-1] if "Interest Expense" in fin.columns else 0
+        depreciation = fin["Depreciation"].iloc[-1] if "Depreciation" in fin.columns else 0
+        ebitda = ebit + interest_exp + depreciation if ebit is not None else None
+        net_income = fin["Net Income"].iloc[-1] if "Net Income" in fin.columns else None
+
         pe = market_cap / net_income if net_income else None
         ev_ebitda = enterprise_value / ebitda if ebitda else None
         ev_sales = enterprise_value / revenue if revenue else None
@@ -61,7 +64,7 @@ if ticker_input:
             "EV/EBITDA": round(ev_ebitda, 2) if ev_ebitda else "N/A",
             "EV/Sales": round(ev_sales, 2) if ev_sales else "N/A",
         })
-    except:
+    except Exception as e:
         st.warning("Unable to calculate valuation multiples.")
 
     # Excel Export
@@ -74,7 +77,7 @@ if ticker_input:
                 "Value": [market_cap, enterprise_value, shares_out, total_debt, cash]
             })
             summary.to_excel(writer, index=False, sheet_name="Summary")
-            hist[['Close']].to_excel(writer, sheet_name="Price History")
+            hist[['Close']].dropna().to_excel(writer, sheet_name="Price History")
             fin.to_excel(writer, sheet_name="Income Statement")
             val = pd.DataFrame({
                 "Metric": ["P/E", "EV/EBITDA", "EV/Sales"],
