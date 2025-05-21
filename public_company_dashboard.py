@@ -74,43 +74,42 @@ if ticker_input:
         output = BytesIO()
         try:
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                # Summary tab
+                # Summary
                 summary = pd.DataFrame({
                     "Metric": ["Market Cap", "Enterprise Value", "Shares Outstanding", "Total Debt", "Cash"],
-                    "Value": [float(market_cap), float(enterprise_value), float(shares_out), float(total_debt), float(cash)]
+                    "Value": [market_cap, enterprise_value, shares_out, total_debt, cash]
                 })
                 summary.to_excel(writer, index=False, sheet_name="Summary")
 
-                # Price History tab
-                price_df = hist[['Close']].dropna().copy()
-                price_df.index.name = "Date"
-                price_df.reset_index(inplace=True)
-                price_df.to_excel(writer, index=False, sheet_name="Price History")
+                # Price History
+                hist_clean = hist[['Close']].copy()
+                hist_clean.index.name = "Date"
+                hist_clean = hist_clean.reset_index()
+                hist_clean.columns = [str(col) for col in hist_clean.columns]
+                hist_clean = hist_clean.astype({"Close": float})
+                hist_clean.to_excel(writer, index=False, sheet_name="Price History")
 
-                # Income Statement tab
-                income_df = fin.copy()
-                income_df.index = income_df.index.strftime('%Y-%m-%d')
-                income_df = income_df.applymap(lambda x: float(x) if pd.notnull(x) else None)
-                income_df.reset_index(inplace=True)
-                income_df.rename(columns={"index": "Date"}, inplace=True)
-                income_df.to_excel(writer, index=False, sheet_name="Income Statement")
+                # Income Statement
+                fin_clean = fin.copy()
+                fin_clean.index = fin_clean.index.strftime('%Y-%m-%d')
+                fin_clean.columns = [str(col) for col in fin_clean.columns]
+                fin_clean = fin_clean.reset_index().rename(columns={"index": "Date"})
+                fin_clean = fin_clean.applymap(lambda x: float(x) if pd.notnull(x) else None)
+                fin_clean.to_excel(writer, index=False, sheet_name="Income Statement")
 
-                # Valuation tab
-                val_df = pd.DataFrame({
+                # Valuation
+                val = pd.DataFrame({
                     "Metric": ["P/E", "EV/EBITDA", "EV/Sales"],
-                    "Value": [
-                        round(pe, 2) if isinstance(pe, (int, float)) else "N/A",
-                        round(ev_ebitda, 2) if isinstance(ev_ebitda, (int, float)) else "N/A",
-                        round(ev_sales, 2) if isinstance(ev_sales, (int, float)) else "N/A"
-                    ]
+                    "Value": [round(pe, 2) if pe else "N/A",
+                              round(ev_ebitda, 2) if ev_ebitda else "N/A",
+                              round(ev_sales, 2) if ev_sales else "N/A"]
                 })
-                val_df.to_excel(writer, index=False, sheet_name="Valuation")
+                val.to_excel(writer, index=False, sheet_name="Valuation")
 
             output.seek(0)
             return output
-
         except Exception as e:
-            st.error(f"❌ Excel export failed: {e}")
+            st.error(f"Excel generation error: {e}")
             return None
 
     excel = to_excel()
