@@ -6,7 +6,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Public Company Dashboard", layout="wide")
 
-st.title("📊 Public Company Financial Dashboard")
+st.markdown("<h1 style='font-size:24px;'>📊 Public Company Financial Dashboard</h1>", unsafe_allow_html=True)
 
 st.markdown("""
 <style>
@@ -103,10 +103,9 @@ if ticker_input:
     st.subheader("📄 Financial Overview")
     try:
         rows = [
-            "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
-            "EBITDA", "EBITDA Margin",
-            "Net Income", "Net Income Margin", "Capital Expenditures", "Operating Cash Flow", "LTM Revenue", "LTM EBITDA"
-        ]
+    "Revenue", "YoY Revenue Growth", "Gross Profit", "Gross Margin",
+    "EBITDA", "EBITDA Margin",
+    "Net Income", "Net Income Margin", "Operating Cash Flow", "LTM"]
 
         income_map = {
             "Revenue": "Total Revenue",
@@ -129,8 +128,12 @@ if ticker_input:
 
         df = df.T
         df.columns = df.columns.astype(str)
-        df.loc["LTM Revenue"] = ltm.get("Total Revenue", float("nan"))
-        df.loc["LTM EBITDA"] = ltm.get("EBITDA", float("nan"))
+        ltm_label = f"LTM (as of {ltm_df.index.max().date()})"
+        df[ltm_label] = ""
+        if "Total Revenue" in ltm:
+            df.at["LTM", ltm_label] = f"${ltm['Total Revenue']:,.0f}"
+        if "EBITDA" in ltm:
+            df.at["LTM", ltm_label] = f"${ltm['EBITDA']:,.0f}"
 
         if "Revenue" in df.index:
             df.loc["YoY Revenue Growth"] = df.loc["Revenue"].pct_change().apply(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
@@ -145,7 +148,7 @@ if ticker_input:
             if "Margin" not in row and "Growth" not in row:
                 df.loc[row] = df.loc[row].apply(lambda x: f"${x:,.0f}" if pd.notnull(x) else "")
 
-        df = df.reindex(rows)
+        df = df.loc[[r for r in rows if r in df.index]]
         st.dataframe(df, use_container_width=True)
 
     except Exception as e:
