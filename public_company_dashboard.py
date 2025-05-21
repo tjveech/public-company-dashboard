@@ -17,57 +17,89 @@ if ticker_input:
 
     # Price Data
     hist = ticker.history(period="5y")
-    hist.index = hist.index.tz_localize(None)  # Remove timezone info for Excel export
+    hist.index = hist.index.tz_localize(None)
+    last_price_date = hist.index.max().date()
+    last_price = hist['Close'].iloc[-1]
+
     st.subheader("📈 Stock Price (5 Years)")
     st.line_chart(hist['Close'])
 
-    # Key Metrics
-    st.subheader("📌 Key Market Data")
+    # Financials
+    fin = ticker.financials.T
+    fin.index = pd.to_datetime(fin.index)
+    fin = fin.sort_index()
+    ltm_date = fin.index.max()
+
+    # Key Market Data & Valuation
+    st.subheader("📌 Key Financial Snapshot")
     try:
         shares_out = info.get('sharesOutstanding', 0)
-        market_cap = info.get('marketCap', 0)
+        market_cap = shares_out * last_price if shares_out else info.get('marketCap', 0)
         total_debt = info.get('totalDebt', 0)
         cash = info.get('totalCash', 0)
         enterprise_value = market_cap + total_debt - cash
 
-        st.metric("Market Cap", f"${market_cap:,.0f}")
-        st.metric("Enterprise Value (EV)", f"${enterprise_value:,.0f}")
+        # Financial figures for LTM
+        revenue = fin.get("Total Revenue", pd.Series([None])).dropna().iloc[-1]
+        ebitda = fin.get("EBITDA", pd.Series([None])).dropna().iloc[-1]
+        net_income = fin.get("Net Income", pd.Series([None])).dropna().iloc[-1]
+
+        # Valuation multiples
+        pe = market_cap / net_income if net_income else None
+        ev_ebitda = enterprise_value / ebitda if ebitda else None
+        ev_sales = enterprise_value / revenue if revenue else None
+
+        st.markdown(f"**As of {last_price_date}**")
+        st.metric("Share Price", f"${last_price:,.2f}")
         st.metric("Shares Outstanding", f"{shares_out:,.0f}")
-        st.metric("Total Debt", f"${total_debt:,.0f}")
-        st.metric("Cash", f"${cash:,.0f}")
-    except:
-        st.warning("Some market data is missing or incomplete.")
+        st.metric("Market Cap", f"${market_cap:,.0f}")
+        st.metric("Cash (as of {ltm_date.date()})", f"${cash:,.0f}")
+        st.metric("Total Debt (as of {ltm_date.date()})", f"${total_debt:,.0f}")
+        st.metric("Enterprise Value", f"${enterprise_value:,.0f}")
 
-    # Financial Statements
-    st.subheader("📄 Income Statement (Last 4 Years)")
-    fin = ticker.financials.T
-    fin.index = pd.to_datetime(fin.index)
-    st.dataframe(fin.tail(4))
+        st.markdown("### 📊 Valuation Multiples (LTM)")
+        st.metric("P/E", f"{round(pe, 2)}" if pe else "N/A")
+        st.metric("EV / EBITDA", f"{round(ev_ebitda, 2)}" if ev_ebitda else "N/A")
+        st.metric("EV / Revenue", f"{round(ev_sales, 2)}" if ev_sales else "N/A")
 
-    # Valuation Multiples
-    st.subheader("📊 Valuation Multiples")
-    pe = ev_ebitda = ev_sales = None
-    try:
-        revenue = fin.get("Total Revenue", pd.Series([None])).dropna()
-        revenue = revenue.iloc[-1] if not revenue.empty else None
-
-        ebitda_series = fin.get("EBITDA", pd.Series([None])).dropna()
-        ebitda = ebitda_series.iloc[-1] if not ebitda_series.empty else None
-
-        net_income = fin.get("Net Income", pd.Series([None])).dropna()
-        net_income = net_income.iloc[-1] if not net_income.empty else None
-
-        pe = market_cap / net_income if net_income and net_income != 0 else None
-        ev_ebitda = enterprise_value / ebitda if ebitda and ebitda != 0 else None
-        ev_sales = enterprise_value / revenue if revenue and revenue != 0 else None
-
-        st.write({
-            "P/E": round(pe, 2) if pe else "N/A",
-            "EV/EBITDA": round(ev_ebitda, 2) if ev_ebitda else "N/A",
-            "EV/Sales": round(ev_sales, 2) if ev_sales else "N/A",
-        })
     except Exception as e:
-        st.warning(f"Unable to calculate valuation multiples. Error: {e}")
+        st.warning(f"Some key data is missing or caused an error: {e}")
+
+    # Income Statement Reformatted
+    st.subheader("📄 Income Statement (Fiscal Years + LTM)")
+    try:
+        income_items = [
+            "Total Revenue", "Gross Profit", "Operating Expenses", "EBITDA",
+            "Ebit", "Net Income", "Capital Expenditures", "Operating Cash Flow"
+        ]
+
+        income_renames = {
+            "Total Revenue": "Revenue",
+            "Gross Profit": "Gross Profit",
+            "Operating Expenses": "OpEx",
+            "EBITDA": "EBITDA",
+            "Ebit": "EBIT",
+            "Net Income": "Net Income",
+            "Capital Expenditures": "CapEx",
+            "Operating Cash Flow": "Op. Cash Flow"
+        }
+
+        fiscal_years = fin.index.year.unique().tolist()
+        income_data = {}
+        for item in income_items:
+            if item in fin.columns:
+                row = fin[item].copy()
+                row.index = row.index.year
+                row = row.groupby(level=0).first()
+                income_data[income_renames.get(item, item)] = row
+
+        df_income = pd.DataFrame(income_data).T
+        df_income = df_income.loc[:, ~df_income.columns.duplicated()].copy()
+        df_income.columns = df_income.columns.astype(str)
+        st.dataframe(df_income)
+
+    except Exception as e:
+        st.warning(f"Could not generate income statement table: {e}")
 
     # Excel Export
     st.subheader("📤 Export to Excel")
@@ -77,35 +109,30 @@ if ticker_input:
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 # Summary
                 summary = pd.DataFrame({
-                    "Metric": ["Market Cap", "Enterprise Value", "Shares Outstanding", "Total Debt", "Cash"],
-                    "Value": [market_cap, enterprise_value, shares_out, total_debt, cash]
+                    "Metric": ["Share Price", "Shares Outstanding", "Market Cap", "Cash", "Debt", "Enterprise Value"],
+                    "Value": [last_price, shares_out, market_cap, cash, total_debt, enterprise_value]
                 })
                 summary.to_excel(writer, index=False, sheet_name="Summary")
 
-                # Price History
-                hist_clean = hist[['Close']].copy()
-                hist_clean.index.name = "Date"
-                hist_clean = hist_clean.reset_index()
-                hist_clean['Date'] = pd.to_datetime(hist_clean['Date']).dt.date  # Remove time for Excel compatibility
-                hist_clean = hist_clean.astype({"Close": float})
-                hist_clean.to_excel(writer, index=False, sheet_name="Price History")
-
-                # Income Statement
-                fin_clean = fin.copy()
-                fin_clean.index = pd.to_datetime(fin_clean.index).date
-                fin_clean.columns = [str(col) for col in fin_clean.columns]
-                fin_clean = fin_clean.reset_index()
-                fin_clean.rename(columns={"index": "Date"}, inplace=True)
-                fin_clean.to_excel(writer, index=False, sheet_name="Income Statement")
-
                 # Valuation
                 val = pd.DataFrame({
-                    "Metric": ["P/E", "EV/EBITDA", "EV/Sales"],
+                    "Metric": ["P/E (LTM)", "EV/EBITDA (LTM)", "EV/Revenue (LTM)"],
                     "Value": [round(pe, 2) if pe else "N/A",
                               round(ev_ebitda, 2) if ev_ebitda else "N/A",
                               round(ev_sales, 2) if ev_sales else "N/A"]
                 })
                 val.to_excel(writer, index=False, sheet_name="Valuation")
+
+                # Price History
+                hist_clean = hist[['Close']].copy()
+                hist_clean.index.name = "Date"
+                hist_clean = hist_clean.reset_index()
+                hist_clean['Date'] = pd.to_datetime(hist_clean['Date']).dt.date
+                hist_clean = hist_clean.astype({"Close": float})
+                hist_clean.to_excel(writer, index=False, sheet_name="Price History")
+
+                # Income Statement
+                df_income.to_excel(writer, sheet_name="Income Statement")
 
             output.seek(0)
             return output
