@@ -48,16 +48,16 @@ if ticker_input:
     st.subheader("📊 Valuation Multiples")
     pe = ev_ebitda = ev_sales = None
     try:
-        revenue = fin["Total Revenue"].iloc[-1] if "Total Revenue" in fin.columns else None
-        ebit = fin["Ebit"].iloc[-1] if "Ebit" in fin.columns else None
-        interest_exp = fin["Interest Expense"].iloc[-1] if "Interest Expense" in fin.columns else 0
-        depreciation = fin["Depreciation"].iloc[-1] if "Depreciation" in fin.columns else 0
+        revenue = fin.get("Total Revenue", pd.Series([None]))[-1]
+        ebit = fin.get("Ebit", pd.Series([None]))[-1]
+        interest_exp = fin.get("Interest Expense", pd.Series([0]))[-1]
+        depreciation = fin.get("Depreciation", pd.Series([0]))[-1]
         ebitda = ebit + interest_exp + depreciation if ebit is not None else None
-        net_income = fin["Net Income"].iloc[-1] if "Net Income" in fin.columns else None
+        net_income = fin.get("Net Income", pd.Series([None]))[-1]
 
-        pe = market_cap / net_income if net_income else None
-        ev_ebitda = enterprise_value / ebitda if ebitda else None
-        ev_sales = enterprise_value / revenue if revenue else None
+        pe = market_cap / net_income if net_income and net_income != 0 else None
+        ev_ebitda = enterprise_value / ebitda if ebitda and ebitda != 0 else None
+        ev_sales = enterprise_value / revenue if revenue and revenue != 0 else None
 
         st.write({
             "P/E": round(pe, 2) if pe else "N/A",
@@ -65,7 +65,7 @@ if ticker_input:
             "EV/Sales": round(ev_sales, 2) if ev_sales else "N/A",
         })
     except Exception as e:
-        st.warning("Unable to calculate valuation multiples.")
+        st.warning(f"Unable to calculate valuation multiples. Error: {e}")
 
     # Excel Export
     st.subheader("📤 Export to Excel")
@@ -77,8 +77,14 @@ if ticker_input:
                 "Value": [market_cap, enterprise_value, shares_out, total_debt, cash]
             })
             summary.to_excel(writer, index=False, sheet_name="Summary")
-            hist[['Close']].dropna().to_excel(writer, sheet_name="Price History")
-            fin.to_excel(writer, sheet_name="Income Statement")
+
+            price_data = hist[['Close']].dropna()
+            price_data = price_data.applymap(lambda x: float(x) if pd.notnull(x) else "")
+            price_data.to_excel(writer, sheet_name="Price History")
+
+            fin_cleaned = fin.applymap(lambda x: float(x) if pd.notnull(x) else "")
+            fin_cleaned.to_excel(writer, sheet_name="Income Statement")
+
             val = pd.DataFrame({
                 "Metric": ["P/E", "EV/EBITDA", "EV/Sales"],
                 "Value": [round(pe, 2) if pe else "N/A",
@@ -89,10 +95,13 @@ if ticker_input:
         output.seek(0)
         return output
 
-    excel = to_excel()
-    st.download_button(
-        label="📥 Download Excel File",
-        data=excel,
-        file_name=f"{ticker_input}_summary_{datetime.today().date()}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    try:
+        excel = to_excel()
+        st.download_button(
+            label="📥 Download Excel File",
+            data=excel,
+            file_name=f"{ticker_input}_summary_{datetime.today().date()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        st.error(f"Excel export failed: {e}")
